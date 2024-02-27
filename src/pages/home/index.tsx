@@ -42,9 +42,21 @@ export function Home(){
     fetchUsers();
   }, []);
 
-  const openModal = () => {
+  const openModal = (user: User | null) => {
     setIsModalOpen(true);
-  }
+    // Se um usuário foi passado, definir o estado onEdit com esse usuário
+    if (user) {
+      setOnEdit(user);
+      setName(user.name);
+      setEmail(user.email);
+      // Certifique-se de que user.number é tratado como um array
+      const telefoneArray = Array.isArray(user.number) ? user.number : [user.number];
+      setIsTelefone(telefoneArray.map(num => ({ value: num })));
+      setTypeFornecedor(user.typeFornecedor);
+      setMessage(user.message);
+    }
+  };
+  
 
   const closeModal = () => {
     setIsModalOpen(false);
@@ -147,25 +159,32 @@ const handleUpdate = async () => {
   }
 
   try {
-    const { id, name, email, number, typeFornecedor, message } = onEdit;
+    const { id, name, email, typeFornecedor, message } = onEdit;
 
-    const updatedUser = { name, email, number, typeFornecedor, message };
+    // Obtém os números de telefone atualizados do estado
+    const updatedNumbers = isTelefone.map(telefone => telefone.value);
 
+    // Crie um objeto com os dados atualizados do usuário
+    const updatedUser = { id, name, email, number: updatedNumbers, typeFornecedor, message };
+
+    // Faça a requisição PUT para atualizar o usuário no backend
     await api.put(`/${id}`, updatedUser);
 
+    // Atualize o estado local com os usuários atualizados
     const updatedUsers = users.map(user =>
       user.id === id ? { ...user, ...updatedUser } : user
     );
 
-    setUsers(updatedUsers);
-    toast.success("Usuário atualizado com sucesso");
-    closeModal();
-    setOnEdit(null);
+    setUsers(updatedUsers); // Atualize o estado local com os usuários atualizados
+    toast.success("Usuário atualizado com sucesso"); // Exiba uma mensagem de sucesso
+    closeModal(); // Feche o modal de edição
+    setOnEdit(null); // Limpe o estado de edição
   } catch (error) {
     console.error('Erro ao atualizar usuário:', error);
-    toast.error("Erro ao atualizar usuário");
+    toast.error("Erro ao atualizar usuário"); // Exiba uma mensagem de erro, se ocorrer algum problema
   }
 };
+
 
 const handleDelete = async (userId: any) => { // Alterado o tipo de userId para any
   try {
@@ -200,10 +219,18 @@ const handleDelete = async (userId: any) => { // Alterado o tipo de userId para 
       <Container>      
         <main className="d-flex flex-column gap-4">
           <section className="d-flex gap-3">
-            <Button style={{ paddingInline: '30px'}} onClick={openModal} >
-              Novo cadastro
-            </Button>
-            <Button disabled={selectedRows.length !== 1} onClick={handleUpdate}>
+          <Button style={{ paddingInline: '30px'}} onClick={() => openModal(null)}>
+            Novo cadastro
+          </Button>
+            <Button
+              disabled={selectedRows.length !== 1}
+              onClick={() => {
+                const selectedUser = users.find(user => user.id === selectedRows[0]);
+                if (selectedUser) {
+                  openModal(selectedUser);
+                }
+              }}
+            >
               <FaEdit />
             </Button>
             <Button 
@@ -245,18 +272,18 @@ const handleDelete = async (userId: any) => { // Alterado o tipo de userId para 
                   <td>{user.name}</td>
                   <td>{user.email}</td>
                   <td>
-                    {Array.isArray(user.number) ? (
-                      user.number.map((phoneNumber, index) => (
-                        <div key={`${user.id}-${index}`}>
-                          {formatTelefoneNumber(phoneNumber)}
+                      {Array.isArray(user.number) ? (
+                        user.number.map((phoneNumber, index) => (
+                          <div key={`${user.id}-${index}`}>
+                            {formatTelefoneNumber(phoneNumber)}
+                          </div>
+                        ))
+                      ) : (
+                        <div>
+                          {formatTelefoneNumber(user.number)}
                         </div>
-                      ))
-                    ) : (
-                      <div>
-                        {formatTelefoneNumber(user.number)}
-                      </div>
-                    )}
-                  </td>
+                      )}
+                    </td>
                   <td>{user.typeFornecedor}</td>
                   <td>{user.message}</td>
                   <td className="align-middle text-center">

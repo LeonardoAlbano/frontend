@@ -44,8 +44,15 @@ export function Home(){
 
   const openModal = (user: User | null) => {
     setIsModalOpen(true);
-    // Se um usuário foi passado, definir o estado onEdit com esse usuário
-    if (user) {
+    // Limpar os campos do formulário ao abrir o modal para um novo cadastro
+    if (!user) {
+      setName("");
+      setEmail("");
+      setIsTelefone([{ value: "" }]);
+      setTypeFornecedor("");
+      setMessage("");
+    } else {
+      // Se um usuário foi passado, definir o estado onEdit com esse usuário
       setOnEdit(user);
       setName(user.name);
       setEmail(user.email);
@@ -56,6 +63,7 @@ export function Home(){
       setMessage(user.message);
     }
   };
+  
   
 
   const closeModal = () => {
@@ -78,11 +86,14 @@ export function Home(){
     setIsTelefone(newTelefone);
   }
 
-  const formatTelefoneNumber = (telefoneNumber: string) => {
-    if (!telefoneNumber) return ""; 
-    telefoneNumber = telefoneNumber.replace(/\D/g, "");
-    const regex = /^(\d{2})(\d{5})(\d{4})$/;
-    return telefoneNumber.replace(regex, "($1) $2-$3");
+  const formatTelefoneNumber = (telefoneNumber: string | string[]) => {
+    const numbersArray = Array.isArray(telefoneNumber) ? telefoneNumber : [telefoneNumber];
+    return numbersArray.map((phoneNumber: string) => {
+      if (!phoneNumber) return "";
+      phoneNumber = phoneNumber.replace(/\D/g, "");
+      const regex = /^(\d{2})(\d{5})(\d{4})$/;
+      return phoneNumber.replace(regex, "($1) $2-$3");
+    }).join(", ");
   };
 
   const toggleRowSelection = (userId: string) => {
@@ -100,91 +111,95 @@ export function Home(){
   
 
 
-// Função para lidar com o cadastro de um novo usuário
-const createUser = () => {
-  // Verifica se todos os campos obrigatórios foram preenchidos
-  if (!name || !email || !isTelefone || !typeFornecedor) {
-    return alert("Preencha todos os campos obrigatórios!");
-  }
-
-  // Converte o array de telefones em uma string separada por vírgulas
-  const telefoneString = isTelefone.map(tel => tel.value).join(',');
-
-  // Cria um novo objeto de usuário com os dados do formulário
-  const newUser = {
-    name: name,
-    email: email,
-    number: [telefoneString],
-    typeFornecedor: typeFornecedor,
-    message: message
+  const createUser = () => {
+    // Verifica se todos os campos obrigatórios foram preenchidos
+    if (!name || !email || isTelefone.length === 0 || !typeFornecedor) {
+      return alert("Preencha todos os campos obrigatórios!");
+    }
+  
+    // Converte a lista de números de telefone em uma única string separada por vírgula
+    const telefoneString = isTelefone.map(tel => tel.value).join(',');
+  
+    // Cria um novo objeto de usuário com os dados do formulário
+    const newUser = {
+      name: name,
+      email: email,
+      number: telefoneString,
+      typeFornecedor: typeFornecedor,
+      message: message
+    };
+  
+    // Envia uma requisição POST para criar um novo usuário
+    api.post("/", newUser)
+      .then(response => {
+        // Atualiza o estado local com a nova lista de usuários
+        setUsers(prevUsers => [...prevUsers, response.data]);
+        console.log("Novo usuário adicionado:", response.data);
+  
+        // Exibe um alerta indicando que o usuário foi criado com sucesso
+        alert("Usuário criado com sucesso");
+  
+        // Limpa os campos do formulário após o cadastro bem-sucedido
+        setName('');
+        setEmail('');
+        setIsTelefone([{ value: "" }]);
+        setTypeFornecedor('');
+        setMessage('');
+  
+        // Fecha o modal e limpa o estado de edição
+        closeModal();
+        setOnEdit(null);
+      })
+      .catch(error => {
+        // Trata possíveis erros durante a requisição
+        if (error.response) {
+          alert(error.response.data.message);
+        } else {
+          alert("Não foi possível cadastrar");
+        }
+      });
   };
 
-  // Envia uma requisição POST para criar um novo usuário
-  api.post("/", newUser)
-    .then(response => {
-      // Atualiza o estado local com a nova lista de usuários
-      setUsers(prevUsers => [...prevUsers, response.data]);
-      console.log("Novo usuário adicionado:", response.data);
-
-      // Exibe um alerta indicando que o usuário foi criado com sucesso
-      alert("Usuário criado com sucesso");
-
-      // Limpa os campos do formulário após o cadastro bem-sucedido
-      setName('');
-      setEmail('');
-      setIsTelefone([{ value: "" }]);
-      setTypeFornecedor('');
-      setMessage('');
-      
-      // Fecha o modal e limpa o estado de edição
-      closeModal();
-      setOnEdit(null);
-    })
-    .catch(error => {
-      // Trata possíveis erros durante a requisição
-      if (error.response) {
-        alert(error.response.data.message);
-      } else {
-        alert("Não foi possível cadastrar");
-      }
-    });
-};
-
-
-
-const handleUpdate = async () => {
-  if (!onEdit) {
-    alert("Nenhum usuário selecionado para atualizar.");
-    return;
-  }
-
-  try {
-    const { id, name, email, typeFornecedor, message } = onEdit;
-
-    // Obtém os números de telefone atualizados do estado
-    const updatedNumbers = isTelefone.map(telefone => telefone.value);
-
-    // Crie um objeto com os dados atualizados do usuário
-    const updatedUser = { id, name, email, number: updatedNumbers, typeFornecedor, message };
-
-    // Faça a requisição PUT para atualizar o usuário no backend
-    await api.put(`/${id}`, updatedUser);
-
-    // Atualize o estado local com os usuários atualizados
-    const updatedUsers = users.map(user =>
-      user.id === id ? { ...user, ...updatedUser } : user
-    );
-
-    setUsers(updatedUsers); // Atualize o estado local com os usuários atualizados
-    toast.success("Usuário atualizado com sucesso"); // Exiba uma mensagem de sucesso
-    closeModal(); // Feche o modal de edição
-    setOnEdit(null); // Limpe o estado de edição
-  } catch (error) {
-    console.error('Erro ao atualizar usuário:', error);
-    toast.error("Erro ao atualizar usuário"); // Exiba uma mensagem de erro, se ocorrer algum problema
-  }
-};
-
+  const handleUpdate = async () => {
+    if (!onEdit) {
+      alert("Nenhum usuário selecionado para atualizar.");
+      return;
+    }
+  
+    try {
+      const { id } = onEdit;
+  
+      // Obtém os números de telefone atualizados do estado
+      const updatedNumbers = isTelefone.map(telefone => telefone.value);
+  
+      // Crie um objeto com os dados atualizados do usuário
+      const updatedUser = {
+        id,
+        name,
+        email,
+        number: updatedNumbers,
+        typeFornecedor,
+        message
+      };
+  
+      // Faça a requisição PUT para atualizar o usuário no backend
+      await api.put(`/${id}`, updatedUser);
+  
+      // Atualize o estado local com os usuários atualizados
+      const updatedUsers = users.map(user =>
+        user.id === id ? { ...user, ...updatedUser } : user
+      );
+  
+      setUsers(updatedUsers); // Atualize o estado local com os usuários atualizados
+      toast.success("Usuário atualizado com sucesso"); // Exiba uma mensagem de sucesso
+      closeModal(); // Feche o modal de edição
+      setOnEdit(null); // Limpe o estado de edição
+    } catch (error) {
+      console.error('Erro ao atualizar usuário:', error);
+      toast.error("Erro ao atualizar usuário"); // Exiba uma mensagem de erro, se ocorrer algum problema
+    }
+  };
+  
 
 const handleDelete = async (userId: any) => { // Alterado o tipo de userId para any
   try {
@@ -215,7 +230,7 @@ const handleDelete = async (userId: any) => { // Alterado o tipo de userId para 
 
   return(
     <>
-      <Header />s
+      <Header />
       <Container>      
         <main className="d-flex flex-column gap-4">
           <section className="d-flex gap-3">
@@ -259,40 +274,46 @@ const handleDelete = async (userId: any) => { // Alterado o tipo de userId para 
                 </tr>
               </thead>
               <tbody>
+
+
               {users.map((user) => (
-                <tr key={user.id}>
-                  <td className="align-middle text-center">
-                    <input 
-                      type="checkbox"
-                      style={{width:'20px', height:'20px'}}
-                      checked={selectedRows.includes(user.id)}
-                      onChange={() => toggleRowSelection(user.id)}
-                    />
-                  </td>
-                  <td>{user.name}</td>
-                  <td>{user.email}</td>
-                  <td>
-                      {Array.isArray(user.number) ? (
-                        user.number.map((phoneNumber, index) => (
-                          <div key={`${user.id}-${index}`}>
-                            {formatTelefoneNumber(phoneNumber)}
-                          </div>
-                        ))
-                      ) : (
-                        <div>
-                          {formatTelefoneNumber(user.number)}
-                        </div>
-                      )}
-                    </td>
-                  <td>{user.typeFornecedor}</td>
-                  <td>{user.message}</td>
-                  <td className="align-middle text-center">
-                    <button>
-                      <FaStar />
-                    </button>
-                  </td>
-                </tr>
+  <tr key={user.id}>
+    <td className="align-middle text-center">
+      <input 
+        type="checkbox"
+        style={{width:'20px', height:'20px'}}
+        checked={selectedRows.includes(user.id)}
+        onChange={() => toggleRowSelection(user.id)}
+      />
+    </td>
+    <td>{user.name}</td>
+    <td>{user.email}</td>
+    <td>
+      {Array.isArray(user.number) ? (
+        user.number.map((phoneNumber, index) => (
+          <div key={`${user.id}-${index}`}>
+            {phoneNumber.split(",").map((num, i) => (
+              <div key={`${user.id}-${index}-${i}`}>{formatTelefoneNumber(num)}</div>
             ))}
+          </div>
+        ))
+      ) : (
+        <div key={user.id}>
+          {typeof user.number === 'string' && user.number.split(",").map((num: string | string[], i: any) => (
+            <div key={`${user.id}-${i}`}>{formatTelefoneNumber(num)}</div>
+          ))}
+        </div>
+      )}
+    </td>
+    <td>{user.typeFornecedor}</td>
+    <td>{user.message}</td>
+    <td className="align-middle text-center">
+      <button>
+        <FaStar />
+      </button>
+    </td>
+  </tr>
+))}
               </tbody>
             </Table>
           </section>
